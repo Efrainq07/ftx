@@ -1,9 +1,12 @@
 import time
 import urllib.parse
 from typing import Optional, Dict, Any, List
+import datetime,time
 
 from requests import Request, Session, Response
 import hmac
+
+import pandas as pd
 
 
 class FtxClient:
@@ -157,3 +160,31 @@ class FtxClient:
 
     def get_position(self, name: str, show_avg_price: bool = False) -> dict:
         return next(filter(lambda x: x['future'] == name, self.get_positions(show_avg_price)), None)
+
+    def get_historical(self, market_name: str, resolution: int, start_time: int, end_time: int) -> dict:
+        return self._get(f'/markets/{market_name}/candles?resolution={resolution}&start_time={start_time}&end_time={end_time}')
+
+    def get_window(self,market_name,resolution='second',window = 'hour'):
+        timeEq = {
+            'second':1,
+            'minute':60,
+            'hour':3600,
+            'day':24*3600,
+            'week':24*3600*7,
+            'month':24*3600*30,
+            'semester':24*3600*30*6,
+            'year':24*3600*30*12
+        }
+
+        if resolution not in [15, 60, 300, 900, 3600, 14400, 86400]:
+            raise Exception('Invalid value, resolution must be 15, 60, 300, 900, 3600, 14400, 86400')
+
+        start_time  = datetime.datetime.now() - datetime.timedelta(seconds=timeEq[window])
+        end_time = datetime.datetime.now()
+
+        start_time = int(time.mktime(start_time.timetuple()))
+        end_time = int(time.mktime(end_time.timetuple()))
+
+        return self.get_historical(market_name,resolution,start_time,end_time)
+
+
