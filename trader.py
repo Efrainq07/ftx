@@ -19,11 +19,13 @@ class FTXTrader:
         self.demo = kwargs['demo']
         self.currency = {'volatile':self.market.split('/')[0],
                         'stable':self.market.split('/')[1]}
-
         self.minimum_roi = kwargs['minimum_roi']
         if(self.demo):
             self.market_price = 0
-        self.last_buy_price = -1
+        if('last_buy_price' in kwargs):
+            self.last_buy_price = kwargs['last_buy_price']
+        else:
+            self.last_buy_price = 0
         if('balance' in kwargs):
             self.balance = kwargs['balance']
 
@@ -60,11 +62,29 @@ class FTXTrader:
             if(datum['short'] and self.state == 'stable'):
                 self.buy_volatile(self.balance[self.currency['stable']])
                 self.state = 'volatile'
-            elif ((datum['market']-self.last_buy_price)/self.last_buy_price > self.minimum_roi ):
-                self.sell_volatile(self.balance[self.currency['volatile']])
-                self.state = 'stable'
+            elif (self.state == 'volatile' ):
+                if( ((self.market_price-self.last_buy_price)/self.last_buy_price > self.minimum_roi ) or \
+                    (not datum['short'] and self.last_buy_price <= self.market_price) ):
+                    self.sell_volatile(self.balance[self.currency['volatile']])
+                    if datum['short']:
+                        self.state = 'stable HODL'
+                    else:
+                        self.state = 'stable'
+                else:
+                    print('''
+                    {}'''.format(datum['date']))
+                    print('HODL {}'.format(self.state))
+                    print(self.balance)
+
+            elif self.state == 'stable HODL':
+                if not datum['short']:
+                    self.state = 'stable'
+
             else:
-                print('HODL',self.balance)
+                print('''
+                {}'''.format(datum['date']))
+                print('HODL {}'.format(self.state))
+                print(self.balance)
 
     def buy_volatile(self,stable_amount):
         self.balance[self.currency['volatile']] += stable_amount/self.market_price
@@ -96,10 +116,11 @@ settings = {'dt':10,
 'resolution':300,
 'lookback':'day',
 'market':'ETHBULL/USD',
-'state' : 'stable',
-'balance': {'USD':24.0,'ETHBULL':0},
+'state' : 'volatile',
+'last_buy_price':67.375,
+'balance': {'USD':0.0,'ETHBULL':0.3519061583577712},
 'demo':True,
-'minimum_roi':0.1}
+'minimum_roi':0.05}
 
 t = FTXTrader(**settings)
 
