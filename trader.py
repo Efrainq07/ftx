@@ -5,6 +5,7 @@ from secret.keys import api_key,api_secret
 import plotly.graph_objects as go
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 import matplotlib.dates as dates
 
 class FTXTrader:
@@ -56,39 +57,41 @@ class FTXTrader:
         res = indicators[['date','avg_EMA26','avg_EMA9']]
         res['short'] = res['avg_EMA26']<=res['avg_EMA9']
         res['market'] = data['close']
+        res['separate'] = np.abs(res['avg_EMA9']-res['avg_EMA26'])>0.65
         datum = res.iloc[-1]
+
         if(self.demo):
             self.market_price = datum['market']
-            if(datum['short'] and self.state == 'stable'):
-                self.buy_volatile(self.balance[self.currency['stable']])
-                self.state = 'volatile'
-            elif (self.state == 'volatile' ):
-                if( ((self.market_price-self.last_buy_price)/self.last_buy_price > self.minimum_roi ) or \
-                    (not datum['short'] and self.last_buy_price <= self.market_price) ):
-                    self.sell_volatile(self.balance[self.currency['volatile']])
-                    if datum['short']:
-                        self.state = 'stable HODL'
-                    else:
-                        self.state = 'stable'
-                else:
-                    print('''
+            print('''
                     {}'''.format(datum['date']))
-                    print('HODL {}'.format(self.state))
-                    print(self.balance)
+            print('State: {}'.format(self.state))
+            print('Balance: ',self.balance)
+
+
+            if(self.state == 'volatile'):
+                roi = (self.market_price-self.last_buy_price)/self.last_buy_price
+
+                if(roi>self.minimum_roi):
+                    self.sell_volatile(self.balance[self.currency['volatile']])
+                    self.state = 'stable HODL'
+                
+                elif ((not datum['short']) and datum['separate']):
+
+                    if(roi < -3*self.minimum_roi ):
+                        self.sell_volatile(self.balance[self.currency['volatile']])
+                        self.state = 'stable'
 
             elif self.state == 'stable HODL':
-                if not datum['short']:
+                
+                if ((not datum['short']) and datum['separate']):
                     self.state = 'stable'
-                print('''
-                {}'''.format(datum['date']))
-                print('HODL {}'.format(self.state))
-                print(self.balance)
-            else:
-                print('''
-                {}'''.format(datum['date']))
-                print('HODL {}'.format(self.state))
-                print(self.balance)
 
+            elif self.state == 'stable':
+
+                if(datum['short'] and datum['separate']):
+                    self.buy_volatile(self.balance[self.currency['stable']])
+                    self.state = 'volatile'
+         
     def buy_volatile(self,stable_amount):
         self.balance[self.currency['volatile']] += stable_amount/self.market_price
         self.balance[self.currency['stable']] = 0
@@ -119,8 +122,8 @@ settings = {'dt':10,
 'resolution':300,
 'lookback':'day',
 'market':'ETHBULL/USD',
-'state' : 'stable HODL',
-'balance': {'USD':24.9,'ETHBULL':0.0},
+'state' : 'stable',
+'balance': {'USD':24,'ETHBULL':0.0},
 'demo':True,
 'minimum_roi':0.05}
 
