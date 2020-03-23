@@ -79,7 +79,10 @@ class FTXTrader:
             elif self.state == 'stable HODL':
                 if not datum['short']:
                     self.state = 'stable'
-
+                print('''
+                {}'''.format(datum['date']))
+                print('HODL {}'.format(self.state))
+                print(self.balance)
             else:
                 print('''
                 {}'''.format(datum['date']))
@@ -116,9 +119,8 @@ settings = {'dt':10,
 'resolution':300,
 'lookback':'day',
 'market':'ETHBULL/USD',
-'state' : 'volatile',
-'last_buy_price':67.375,
-'balance': {'USD':0.0,'ETHBULL':0.3519061583577712},
+'state' : 'stable HODL',
+'balance': {'USD':24.9,'ETHBULL':0.0},
 'demo':True,
 'minimum_roi':0.05}
 
