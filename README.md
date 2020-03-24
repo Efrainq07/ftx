@@ -7,5 +7,7 @@ You can find the REST API docs [here](https://ftx1.docs.apiary.io), websocket AP
 You can create API keys on your [profile page](https://ftx.com/profile).
 
 The main FTXTrader class can be used by running trader.py.
+
 Demo mode included on FTXTrader class.
+
 See comments for details.
