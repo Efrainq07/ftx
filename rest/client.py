@@ -182,13 +182,20 @@ class FtxClient:
 
         if resolution not in [15, 60, 300, 900, 3600, 14400, 86400]:
             raise Exception('Invalid value, resolution must be 15, 60, 300, 900, 3600, 14400, 86400')
+        
+        chunks = int((timeEq[window]/(1500*resolution)))
+        result = []
+        end_time = datetime.datetime.today()
+        end_time = end_time.timestamp()
+        start_time = end_time - timeEq[window]
 
-        start_time  = datetime.datetime.now() - datetime.timedelta(seconds=timeEq[window])
-        end_time = datetime.datetime.now()
+        for i in range(0,chunks):
+            add = self.get_historical(market_name,resolution,end_time-(i+1)*resolution*1500,end_time - i*resolution*1500)
+            result = add+result
+        
+        add = self.get_historical(market_name,resolution,start_time,end_time-chunks*resolution*1500)
+        result = add+result
 
-        start_time = int(time.mktime(start_time.timetuple()))
-        end_time = int(time.mktime(end_time.timetuple()))
-
-        return self.get_historical(market_name,resolution,start_time,end_time)
+        return result
 
 
