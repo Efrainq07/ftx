@@ -27,7 +27,10 @@ class FTXTrader:
         self.client = cl.FtxClient(
             api_key=self.api_key, api_secret=self.api_secret)  # FTX API Client
         self.state = kwargs['state']  # Initial coin state
-        self.demo = kwargs['demo']  # Boolean to run off the market
+        if('demo' in kwargs):
+            self.demo = kwargs['demo']  # Boolean to run off the market
+        else:
+            self.demo = False
         self.currency = {'volatile': self.market.split('/')[0],
                          'stable': self.market.split('/')[1]}  # Dictionary of coin pairs
         self.minimum_roi = kwargs['minimum_roi']  # Minimum roi threshold
@@ -124,9 +127,9 @@ class FTXTrader:
 
         if(self.demo):
             self.market_price = last_row['market']
-            # print('''{}'''.format(last_row['date']))
+            print(f'''{datetime.datetime.today()}''')
             print('State: {}'.format(self.state))
-            print('Balance: ', self.balance)
+            print('Balance: ', self.get_balance())
 
             if(self.state == 'volatile'):
                 roi = (self.market_price-self.last_buy_price) / \
@@ -154,30 +157,58 @@ class FTXTrader:
                     self.buy_volatile(self.balance[self.currency['stable']])
                     self.state = 'volatile'
 
+    def get_balance(self):
+        balances = client.get_balances()
+        balances = pd.DataFrame(balances)
+        bal_volatile = balances[balances['coin']==self.currency['volatile']]['free']
+        bal_stable = balances[balances['coin']==self.currency['stable']]['free']
+        return {self.currency['volatile']:bal_volatile,self.currency['stable']:bal_stable}
+
     def buy_volatile(self, stable_amount):
         """
         This function buys the volatile coin and sells all the stable one
         """
-        self.balance[self.currency['volatile']] += stable_amount/self.market_price
-        self.balance[self.currency['stable']] = 0
+        if self.demo:
+            buy_intend = stable_amount/self.market_price
+            self.balance[self.currency['volatile']] += buy_intend
+            self.balance[self.currency['stable']] = 0
+            buy_price = buy_intend/stable_amount
+        else:
+            buy_intend = stable_amount/self.market_price
+            order_start = datetime.datetime.today().timestamp()
+            order_data = self.client.place_order(self.market,'buy',None,buy_intend,'market')
+            time.sleep(0.2)
+            history_data = self.client.get_order_history(self.market,'buy','market',order_start)
+            order_status = next(order for order in history_data if order['id'] == order_data['id'])
+            buy_price = order_status['avgFillPrice']
 
 
-        print('Bought {} {} for {} {}'.format(stable_amount/self.market_price,
-                                              self.currency['volatile'], stable_amount, self.currency['stable']))
+        print(f'Bought {buy_intend} {self.currency['volatile']} for {buy_price*buy_intend} {self.currency['stable']}')
+        print(f'({buy_price} {self.market})')
         print(self.balance)
-        self.last_buy_price = self.market_price
+        print('')
+        self.last_buy_price = buy_price
 
     def sell_volatile(self, volatile_amount):
         """
         This function sells the volatile coin and buys all the stable one
         """
-        self.balance[self.currency['stable']] += volatile_amount*self.market_price
-        self.balance[self.currency['volatile']] = 0
+        if(self.demo):
+            self.balance[self.currency['stable']] += volatile_amount*self.market_price
+            self.balance[self.currency['volatile']] = 0
+        else:
+            sell_intend = volatile_amount
+            order_start = datetime.datetime.today.timestamp()
+            order_data = self.client.place_order(self.market,'sell',None,sell_intend,'market')
+            time.sleep(0.2)
+            history_data = self.client.get_order_history(self.market,'sell','market',order_start)
+            order_status = next(order for order in history_data if order['id'] == order_data['id'])
+            sell_price = order_status['avgFillPrice']
 
-
-        print('Sold {} {} for {} {}'.format(volatile_amount,
-                                            self.currency['volatile'], volatile_amount*self.market_price, self.currency['stable']))
+        print(f'Sold {sell_intend} {self.currency['volatile']} for {sell_price*sell_intend} {self.currency['stable']}')
+        print(f'({sell_price} {self.market})')
         print(self.balance)
+        print('')
 
 
 
