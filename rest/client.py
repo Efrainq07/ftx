@@ -164,7 +164,11 @@ class FtxClient:
     def get_historical(self, market_name: str, resolution: int, start_time: int, end_time: int) -> dict:
         return self._get(f'/markets/{market_name}/candles?resolution={resolution}&start_time={start_time}&end_time={end_time}')
 
-    def get_window(self,market_name,resolution='second',window = 'hour'):
+    def get_window(self, market_name, resolution='second', window = 'hour'):
+        """
+        Gets data in a certain window and with certain resolution
+        """
+
         timeEq = {
             'second':1,
             'minute':60,
