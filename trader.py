@@ -53,8 +53,8 @@ class FTXTrader:
         initial_data = self.make_timeseries_df(initial_data)
         initial_indicators = self.make_indicators_df(initial_data)
         initial_indicators['index'] = list(range(0,len(initial_indicators)))
-        self.x, self.avg_EMA26, self.avg_EMA9, self.ohlc_list = initial_indicators['index'], initial_indicators['avg_EMA26'],\
-             initial_indicators['avg_EMA9'], [[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
+        self.x, self.avg_EMA26, self.avg_EMA9, self.ohlc_list = initial_indicators['index'].tolist(), initial_indicators['avg_EMA26'].tolist(),\
+             initial_indicators['avg_EMA9'].tolist(), [[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
         
         self.update_graph()
  
@@ -78,7 +78,7 @@ class FTXTrader:
 
         # Scheduler runs the trading function every dt seconds
         scd.every(kwargs['dt']).seconds.do(self.trading)
-        scd.every(self.resolution).seconds.do(self.update_graph)
+        scd.every(self.resolution/2).seconds.do(self.update_graph)
 
     def make_timeseries_df(self, data):
         """
@@ -93,19 +93,20 @@ class FTXTrader:
     def update_graph(self):
         last_row = self.last_datum
         ## Update graph
-        if(last_row):
-            self.x.append(last_row['date'])
+        if(last_row is not None):
+            self.x.append(self.x[-1]+1)
 
-            self.avg_EMA26.append(last_row.iloc[1])
-            self.avg_EMA9.append(last_row.iloc[2])
-            self.ohlc_list.append([ohlc_list[-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
+            self.avg_EMA26.append(last_row['avg_EMA26'])
+            self.avg_EMA9.append(last_row['avg_EMA9'])
+            self.ohlc_list.pop(0)
+            self.ohlc_list.append([self.ohlc_list[-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
 
         # Update line graph
         mpf.candlestick_ohlc(self.ax, self.ohlc_list, width=0.4, colorup='#77d879', colordown='#db3f3f')
-        self.line1 = self.ax.plot(self.x, self.avg_EMA26, 'g', label = "avg_EMA26")
+        self.line1 = self.ax.plot(self.x, self.avg_EMA26, 'b', label = "avg_EMA26")
         self.line2 = self.ax.plot(self.x, self.avg_EMA9, 'r', label = "avg_EMA9")
     
-        if (last_row):
+        if (last_row is not None):
             pass
         else:
             self.ax.legend()
@@ -260,5 +261,4 @@ t = FTXTrader(**settings_dict)
 
 while True:
     scd.run_pending()
-    plt.pause(.5)
-    time.sleep(.5)
+    plt.pause(1)
