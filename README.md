@@ -1,4 +1,4 @@
-# FTX Sample Code
+# FTX Trader with various algorithms
 
 [FTX](https://ftx.com/) is a cryptocurrency derivatives exchange.
 
@@ -6,8 +6,8 @@ You can find the REST API docs [here](https://ftx1.docs.apiary.io), websocket AP
 
 You can create API keys on your [profile page](https://ftx.com/profile).
 
-FTX is integrated with CCXT here:
-- https://github.com/ccxt/ccxt/blob/master/js/ftx.js
-- https://github.com/ccxt/ccxt/blob/master/python/ccxt/ftx.py
-- https://github.com/ccxt/ccxt/blob/master/python/ccxt/async_support/ftx.py
-- https://github.com/ccxt/ccxt/blob/master/php/ftx.py
+The main FTXTrader class can be used by running trader.py.
+
+Demo mode included on FTXTrader class.
+
+See comments for details.
