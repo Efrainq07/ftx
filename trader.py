@@ -67,14 +67,14 @@ class FTXTrader:
             self.last_buy_price = kwargs['last_buy_price']
         else:
             self.last_buy_price = 0
-
-        if('balance' in kwargs):
-            # Initial value for the account balance of the coin pair
-            self.balance = kwargs['balance']
-        else:
-            self.demo = False
-            self.balance = self.get_balance()
-            self.demo = True
+        if(self.demo):
+            if('balance' in kwargs):
+                # Initial value for the account balance of the coin pair
+                self.balance = kwargs['balance']
+            else:
+                self.demo = False
+                self.balance = self.get_balance()
+                self.demo = True
 
         # Scheduler runs the trading function every dt seconds
         scd.every(kwargs['dt']).seconds.do(self.trading)
@@ -134,56 +134,60 @@ class FTXTrader:
         Trading functions. 
         Calculates EMAs, checks for crosses, predicts a state and buys or sells 
         """
+        try:
+            # Gets historical data from a certain time window and resolution
+            historical = self.client.get_window(self.market, self.resolution, self.window)
 
-        # Gets historical data from a certain time window and resolution
-        historical = self.client.get_window(self.market, self.resolution, self.window)
+            # Gets data into dataframe from the windowed historical 
+            data = self.make_timeseries_df(historical)
+            
+            ### Sets indicators dataframe
+            results = self.make_indicators_df(data)
 
-        # Gets data into dataframe from the windowed historical 
-        data = self.make_timeseries_df(historical)
-        
-        ### Sets indicators dataframe
-        results = self.make_indicators_df(data)
+            # Creates results DataFrame with the EMA indicators 
+            results['short'] = results['avg_EMA26'] <= results['avg_EMA9'] # Determines times when EMAs cross
+            results['separate'] = np.abs(results['avg_EMA9'] - results['avg_EMA26']) > 0.5 # Determines times with differences greater than 0.65 units 
 
-        # Creates results DataFrame with the EMA indicators 
-        results['short'] = results['avg_EMA26'] <= results['avg_EMA9'] # Determines times when EMAs cross
-        results['separate'] = np.abs(results['avg_EMA9'] - results['avg_EMA26']) > 0.65 # Determines times with differences greater than 0.65 units 
-
-        # Gets the last row of the results
-        last_row = results.iloc[-1]
-        self.last_datum = last_row
+            # Gets the last row of the results
+            last_row = results.iloc[-1]
+            self.last_datum = last_row
 
 
-        self.market_price = last_row['market']
-        print(f'''{datetime.datetime.today()}''')
-        print('State: {}'.format(self.state))
-        print('Balance: ', self.get_balance())
-        print('')
+            self.market_price = last_row['market']
+            print(f'''{datetime.datetime.today()}''')
+            if(self.demo):
+                print('##DEMO MODE##')
+            print('State: {}'.format(self.state))
+            print('Balance: ', self.get_balance())
+            print('')
 
-        if(self.state == 'volatile'):
-            roi = (self.market_price-self.last_buy_price) / \
-                self.last_buy_price
+            if(self.state == 'volatile'):
+                roi = (self.market_price-self.last_buy_price) / \
+                    self.last_buy_price
 
-            if(roi > self.minimum_roi):
-                self.sell_volatile(self.balance[self.currency['volatile']])
-                self.state = 'stable HODL'
+                if(roi > self.minimum_roi):
+                    self.sell_volatile(self.balance[self.currency['volatile']])
+                    self.state = 'stable HODL'
 
-            elif ((not last_row['short']) and last_row['separate']):
+                elif ((not last_row['short']) and last_row['separate']):
 
-                if(roi < -3*self.minimum_roi):
-                    self.sell_volatile(
-                        self.balance[self.currency['volatile']])
+                    if(roi < -3*self.minimum_roi):
+                        self.sell_volatile(
+                            self.balance[self.currency['volatile']])
+                        self.state = 'stable'
+
+            elif self.state == 'stable HODL':
+
+                if ((not last_row['short']) and last_row['separate']):
                     self.state = 'stable'
 
-        elif self.state == 'stable HODL':
+            elif self.state == 'stable':
 
-            if ((not last_row['short']) and last_row['separate']):
-                self.state = 'stable'
-
-        elif self.state == 'stable':
-
-            if(last_row['short'] and last_row['separate']):
-                self.buy_volatile(self.balance[self.currency['stable']])
-                self.state = 'volatile'
+                if(last_row['short'] and last_row['separate']):
+                    self.buy_volatile(self.balance[self.currency['stable']])
+                    self.state = 'volatile'
+        except e:
+            print('ERROR:',e)
 
     def get_balance(self):
         if(self.demo):
@@ -226,7 +230,7 @@ class FTXTrader:
 
         print(f'Bought {buy_intend} {self.currency["volatile"]} for {buy_price*buy_intend} {self.currency["stable"]}')
         print(f'({buy_price} {self.market})')
-        print(self.balance)
+        print(self.get_balance())
         print('')
         self.last_buy_price = buy_price
 
