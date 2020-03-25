@@ -6,7 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as dates
+import mpl_finance as mpf
 import datetime
+import matplotlib.dates as dates
 
 
 class FTXTrader:
@@ -46,11 +48,12 @@ class FTXTrader:
         self.ax = self.fig.add_subplot(111)
 
 
-        initial_data =self.client.get_window(self.market,self.resolution,'day')
+        initial_data =self.client.get_window(self.market,self.resolution,'quarterday')
         initial_data = self.make_timeseries_df(initial_data)
         initial_indicators = self.make_indicators_df(initial_data)
-        self.x, self.avg_EMA26, self.avg_EMA9, self.close = list(range(0,len(initial_data))), initial_indicators['avg_EMA26'],\
-             initial_indicators['avg_EMA9'], initial_data['close']
+        initial_indicators['index'] = list(range(0,len(initial_indicators)))
+        self.x, self.avg_EMA26, self.avg_EMA9, self.ohlc_list = initial_indicators['index'], initial_indicators['avg_EMA26'],\
+             initial_indicators['avg_EMA9'], [[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
         
         self.update_graph()
  
@@ -90,19 +93,16 @@ class FTXTrader:
         last_row = self.last_datum
         ## Update graph
         if(last_row):
-            if (self.x == []):
-                self.x.append(1)
-            else: 
-                self.x.append(self.x[-1] + 1)
+            self.x.append(last_row['date'])
 
             self.avg_EMA26.append(last_row.iloc[1])
             self.avg_EMA9.append(last_row.iloc[2])
-            self.close.append(last_row.iloc[4])
+            self.ohlc_list.append([ohlc_list[-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
 
         # Update line graph
-        self.line1, = self.ax.plot(self.x, self.avg_EMA26, 'r-', label = "avg_EMA26")
-        self.line2, = self.ax.plot(self.x, self.avg_EMA9, 'b-', label = "avg_EMA9")
-        self.line2, = self.ax.plot(self.x, self.close, 'g-', label = "close")
+        mpf.candlestick_ohlc(self.ax, self.ohlc_list, width=0.4, colorup='#77d879', colordown='#db3f3f')
+        self.line1 = self.ax.plot(self.x, self.avg_EMA26, 'g', label = "avg_EMA26")
+        self.line2 = self.ax.plot(self.x, self.avg_EMA9, 'r', label = "avg_EMA9")
 
         if (last_row):
             pass
@@ -115,11 +115,13 @@ class FTXTrader:
 
     def make_indicators_df(self,data):
         ### Sets indicators dataframe
-        indicators = pd.DataFrame({'date': data['startTime']})
+        indicators = pd.DataFrame({'date': pd.to_datetime(data['startTime'])})
         # Calculates EMAs and adds them as indicators 
         for col in ['open', 'high', 'low', 'close', 'avg']:
+            indicators[col] = data[col]
             indicators[col + '_EMA26'] = data[col].ewm(span=26).mean()
             indicators[col + '_EMA9'] = data[col].ewm(span=9).mean()
+        indicators['market'] = indicators['close']
         return indicators
 
 
@@ -136,12 +138,10 @@ class FTXTrader:
         data = self.make_timeseries_df(historical)
         
         ### Sets indicators dataframe
-        indicators = self.make_indicators_df(data)
+        results = self.make_indicators_df(data)
 
         # Creates results DataFrame with the EMA indicators 
-        results = indicators[['date', 'avg_EMA26', 'avg_EMA9']]
         results['short'] = results['avg_EMA26'] <= results['avg_EMA9'] # Determines times when EMAs cross
-        results['market'] = data['close']
         results['separate'] = np.abs(results['avg_EMA9'] - results['avg_EMA26']) > 0.65 # Determines times with differences greater than 0.65 units 
 
         # Gets the last row of the results

@@ -172,7 +172,11 @@ class FtxClient:
         timeEq = {
             'second':1,
             'minute':60,
+            '15minute':60*15,
+            '30minute':60*30,
             'hour':3600,
+            'quarterday':6*3600,
+            'halfday':12*3600,
             'day':24*3600,
             'week':24*3600*7,
             'month':24*3600*30,
