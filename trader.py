@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as dates
-from datetime import datetime 
+import datetime
 
 
 class FTXTrader:
@@ -21,11 +21,15 @@ class FTXTrader:
         self.market = kwargs['market']  # Coin pair to trade
         self.api_key = kwargs['api_key']  # API key for ftx
         self.api_secret = kwargs['api_secret']  # API secret for ftx
+        if('subaccount' in kwargs):
+            self.subaccount = kwargs['subaccount']
+        else:
+            self.subaccount = None
         self.window = kwargs['window']  # Window / lookback of data to consider
         # Granularity of data requested from ftx API
         self.resolution = kwargs['resolution']
         self.client = cl.FtxClient(
-            api_key=self.api_key, api_secret=self.api_secret)  # FTX API Client
+            api_key=self.api_key, api_secret=self.api_secret,subaccount_name=self.subaccount)  # FTX API Client
         self.state = kwargs['state']  # Initial coin state
         if('demo' in kwargs):
             self.demo = kwargs['demo']  # Boolean to run off the market
@@ -36,10 +40,19 @@ class FTXTrader:
         self.minimum_roi = kwargs['minimum_roi']  # Minimum roi threshold
 
         # Initialize graph 
+        self.last_datum = None
         plt.ion()
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111)
-        self.x, self.avg_EMA26, self.avg_EMA9, self.close = [], [], [], []
+
+
+        initial_data =self.client.get_window(self.market,self.resolution,'day')
+        initial_data = self.make_timeseries_df(initial_data)
+        initial_indicators = self.make_indicators_df(initial_data)
+        self.x, self.avg_EMA26, self.avg_EMA9, self.close = list(range(0,len(initial_data))), initial_indicators['avg_EMA26'],\
+             initial_indicators['avg_EMA9'], initial_data['close']
+        
+        self.update_graph()
  
 
         if(self.demo):
@@ -54,9 +67,14 @@ class FTXTrader:
         if('balance' in kwargs):
             # Initial value for the account balance of the coin pair
             self.balance = kwargs['balance']
+        else:
+            self.demo = False
+            self.balance = self.get_balance()
+            self.demo = True
 
         # Scheduler runs the trading function every dt seconds
         scd.every(kwargs['dt']).seconds.do(self.trading)
+        scd.every(self.resolution).seconds.do(self.update_graph)
 
     def make_timeseries_df(self, data):
         """
@@ -68,30 +86,42 @@ class FTXTrader:
 
         return df
 
-    def update_graph(self, last_row):
+    def update_graph(self):
+        last_row = self.last_datum
         ## Update graph
-        if (self.x == []):
-            self.x.append(1)
-        else: 
-            self.x.append(self.x[-1] + 1)
+        if(last_row):
+            if (self.x == []):
+                self.x.append(1)
+            else: 
+                self.x.append(self.x[-1] + 1)
 
-        self.avg_EMA26.append(last_row.iloc[1])
-        self.avg_EMA9.append(last_row.iloc[2])
-        self.close.append(last_row.iloc[4])
+            self.avg_EMA26.append(last_row.iloc[1])
+            self.avg_EMA9.append(last_row.iloc[2])
+            self.close.append(last_row.iloc[4])
 
         # Update line graph
         self.line1, = self.ax.plot(self.x, self.avg_EMA26, 'r-', label = "avg_EMA26")
         self.line2, = self.ax.plot(self.x, self.avg_EMA9, 'b-', label = "avg_EMA9")
         self.line2, = self.ax.plot(self.x, self.close, 'g-', label = "close")
 
-        if (self.x == [1]):
-            self.ax.legend()
-        else:
+        if (last_row):
             pass
+        else:
+            self.ax.legend()
 
         # Redraw figure
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+
+    def make_indicators_df(self,data):
+        ### Sets indicators dataframe
+        indicators = pd.DataFrame({'date': data['startTime']})
+        # Calculates EMAs and adds them as indicators 
+        for col in ['open', 'high', 'low', 'close', 'avg']:
+            indicators[col + '_EMA26'] = data[col].ewm(span=26).mean()
+            indicators[col + '_EMA9'] = data[col].ewm(span=9).mean()
+        return indicators
+
 
     def trading(self):
         """
@@ -106,12 +136,7 @@ class FTXTrader:
         data = self.make_timeseries_df(historical)
         
         ### Sets indicators dataframe
-        indicators = pd.DataFrame({'date': data['startTime']})
-        
-        # Calculates EMAs and adds them as indicators 
-        for col in ['open', 'high', 'low', 'close', 'avg']:
-            indicators[col + '_EMA26'] = data[col].ewm(span=26).mean()
-            indicators[col + '_EMA9'] = data[col].ewm(span=9).mean()
+        indicators = self.make_indicators_df(data)
 
         # Creates results DataFrame with the EMA indicators 
         results = indicators[['date', 'avg_EMA26', 'avg_EMA9']]
@@ -122,12 +147,12 @@ class FTXTrader:
         # Gets the last row of the results
         last_row = results.iloc[-1]
 
-        self.update_graph(last_row)
 
         self.market_price = last_row['market']
         print(f'''{datetime.datetime.today()}''')
         print('State: {}'.format(self.state))
         print('Balance: ', self.get_balance())
+        print('')
 
         if(self.state == 'volatile'):
             roi = (self.market_price-self.last_buy_price) / \
@@ -156,10 +181,21 @@ class FTXTrader:
                 self.state = 'volatile'
 
     def get_balance(self):
-        balances = client.get_balances()
-        balances = pd.DataFrame(balances)
-        bal_volatile = balances[balances['coin']==self.currency['volatile']]['free']
-        bal_stable = balances[balances['coin']==self.currency['stable']]['free']
+        if(self.demo):
+            return self.balance
+        else:
+            balances = self.client.get_balances()
+            balances = pd.DataFrame(balances)
+            bal_volatile = balances[balances['coin']==self.currency['volatile']]
+            bal_stable = balances[balances['coin']==self.currency['stable']]
+            if(len(bal_volatile)!=0):
+                bal_volatile = bal_volatile.loc[0]['free']
+            else:
+                bal_volatile = 0
+            if(len(bal_stable)!=0):
+                bal_stable = bal_stable.loc[0]['free']
+            else:
+                bal_stable = 0
         return {self.currency['volatile']:bal_volatile,self.currency['stable']:bal_stable}
 
     def buy_volatile(self, stable_amount):
@@ -168,8 +204,8 @@ class FTXTrader:
         """
         if self.demo:
             buy_intend = stable_amount/self.market_price
-            self.balance[self.currency['volatile']] += buy_intend
-            self.balance[self.currency['stable']] = 0
+            self.get_balance()[self.currency['volatile']] += buy_intend
+            self.get_balance()[self.currency['stable']] = 0
             buy_price = buy_intend/stable_amount
         else:
             buy_intend = stable_amount/self.market_price
@@ -181,7 +217,7 @@ class FTXTrader:
             buy_price = order_status['avgFillPrice']
 
 
-        print(f'Bought {buy_intend} {self.currency['volatile']} for {buy_price*buy_intend} {self.currency['stable']}')
+        print(f'Bought {buy_intend} {self.currency["volatile"]} for {buy_price*buy_intend} {self.currency["stable"]}')
         print(f'({buy_price} {self.market})')
         print(self.balance)
         print('')
@@ -192,8 +228,10 @@ class FTXTrader:
         This function sells the volatile coin and buys all the stable one
         """
         if(self.demo):
+            sell_intend = volatile_amount
             self.balance[self.currency['stable']] += volatile_amount*self.market_price
             self.balance[self.currency['volatile']] = 0
+            sell_price = self.market_price
         else:
             sell_intend = volatile_amount
             order_start = datetime.datetime.today.timestamp()
@@ -203,7 +241,7 @@ class FTXTrader:
             order_status = next(order for order in history_data if order['id'] == order_data['id'])
             sell_price = order_status['avgFillPrice']
 
-        print(f'Sold {sell_intend} {self.currency['volatile']} for {sell_price*sell_intend} {self.currency['stable']}')
+        print(f'Sold {sell_intend} {self.currency["volatile"]} for {sell_price*sell_intend} {self.currency["stable"]}')
         print(f'({sell_price} {self.market})')
         print(self.balance)
         print('')
