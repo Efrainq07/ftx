@@ -10,4 +10,4 @@ settings_dict = {'dt': 10,
             'state': 'stable',
             'balance': {'USD': 25, 'ETHBULL': 0.0},
             'demo': True,
-            'minimum_roi': 0.05}
+            'maximum_loss': 0.15}

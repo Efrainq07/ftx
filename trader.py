@@ -9,6 +9,7 @@ import matplotlib.dates as dates
 import mpl_finance as mpf
 import datetime
 import matplotlib.dates as dates
+import matplotlib.cm as cm
 
 
 class FTXTrader:
@@ -39,14 +40,15 @@ class FTXTrader:
             self.demo = False
         self.currency = {'volatile': self.market.split('/')[0],
                          'stable': self.market.split('/')[1]}  # Dictionary of coin pairs
-        self.minimum_roi = kwargs['minimum_roi']  # Minimum roi threshold
+        self.maximum_loss = kwargs['maximum_loss']  # Minimum roi threshold
 
         # Initialize graph 
         self.last_datum = None
         plt.style.use('dark_background')
         plt.ion()
         self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111)
+        self.ax = self.fig.add_subplot(211)
+        self.axslope = self.fig.add_subplot(212)
 
 
         initial_data =self.client.get_window(self.market,self.resolution,'quarterday')
@@ -55,7 +57,17 @@ class FTXTrader:
         initial_indicators['index'] = list(range(0,len(initial_indicators)))
         self.x, self.avg_EMA26, self.avg_EMA9, self.ohlc_list = initial_indicators['index'].tolist(), initial_indicators['avg_EMA26'].tolist(),\
              initial_indicators['avg_EMA9'].tolist(), [[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
-        
+        self.graph_dict= {
+            'x':list(range(0,len(initial_indicators))),
+            'avg_EMA26':initial_indicators['avg_EMA26'].tolist(),
+            'avg_EMA9': initial_indicators['avg_EMA9'].tolist(),
+            'avg_EMA20':initial_indicators['avg_EMA20'].tolist(),
+            'avg_EMA20_slope':initial_indicators['avg_EMA20_slope'].tolist(),
+            'avg_20_bollinger_bottom':initial_indicators['avg_20_bollinger_bottom'].tolist(),
+            'avg_20_bollinger':initial_indicators['avg_20_bollinger'].tolist(),
+            'avg_20_bollinger_slope':initial_indicators['avg_20_bollinger_slope'].tolist(),
+            'ohlc_list':[[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
+        }
         self.update_graph()
  
 
@@ -66,7 +78,7 @@ class FTXTrader:
             # Last price at which a coin was bought
             self.last_buy_price = kwargs['last_buy_price']
         else:
-            self.last_buy_price = 0
+            self.last_buy_price = -1
         if(self.demo):
             if('balance' in kwargs):
                 # Initial value for the account balance of the coin pair
@@ -94,17 +106,29 @@ class FTXTrader:
         last_row = self.last_datum
         ## Update graph
         if(last_row is not None):
-            self.x.append(self.x[-1]+1)
-
-            self.avg_EMA26.append(last_row['avg_EMA26'])
-            self.avg_EMA9.append(last_row['avg_EMA9'])
-            self.ohlc_list.pop(0)
-            self.ohlc_list.append([self.ohlc_list[-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
-
+            self.graph_dict['x'].append(self.graph_dict['x'][-1]+1)
+            self.graph_dict['ohlc_list'].append([self.graph_dict['ohlc_list'][-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
+            for key in self.graph_dict:
+                if(key in ['x','ohlc_list']):
+                    continue
+                self.graph_dict[key].append(last_row[key])
+            
         # Update line graph
-        mpf.candlestick_ohlc(self.ax, self.ohlc_list, width=0.4, colorup='#77d879', colordown='#db3f3f')
-        self.line1 = self.ax.plot(self.x, self.avg_EMA26, 'b', label = "avg_EMA26")
-        self.line2 = self.ax.plot(self.x, self.avg_EMA9, 'r', label = "avg_EMA9")
+        colors = cm.rainbow(np.linspace(0,1,len(self.graph_dict)))
+        mpf.candlestick_ohlc(self.ax, self.graph_dict['ohlc_list'], width=0.4, colorup='#77d879', colordown='#db3f3f')
+        for color,key in zip(colors,self.graph_dict):
+            if(key in ['x','ohlc_list']):
+                continue
+            if key.split('_')[-1]=='slope':
+
+                self.axslope.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key) 
+            elif key.split('_')[-1]=='bollinger':
+                self.ax.fill_between(self.graph_dict['x'],self.graph_dict[key+'_bottom'],self.graph_dict[key],color = 'grey') 
+            elif key.split('_')[-1]=='bottom':
+                continue  
+            else:
+                self.ax.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key)
+
     
         if (last_row is not None):
             pass
@@ -112,6 +136,10 @@ class FTXTrader:
             self.ax.legend()
             self.ax.set_xlabel('Últimas 6 horas')
             self.ax.set_ylabel(self.market)
+
+            self.axslope.legend()
+            self.axslope.set_ylabel('Slope')
+            self.axslope.set_xlabel('Últimas 6 horas')
 
         # Redraw figure
         self.fig.canvas.draw()
@@ -124,7 +152,14 @@ class FTXTrader:
         for col in ['open', 'high', 'low', 'close', 'avg']:
             indicators[col] = data[col]
             indicators[col + '_EMA26'] = data[col].ewm(span=26).mean()
+            indicators[col + '_EMA20'] = data[col].ewm(span=20).mean()
             indicators[col + '_EMA9'] = data[col].ewm(span=9).mean()
+            indicators[col+'_std20'] = data[col].rolling(window=20).std() 
+            indicators[col+'_20_bollinger'] = indicators[col+'_EMA20']+2*indicators[col+'_std20']
+            indicators[col+'_20_bollinger_bottom'] = indicators[col+'_EMA20']-2*indicators[col+'_std20']
+            indicators[col+'_EMA20_slope'] = indicators[col+'_EMA20'].diff()
+            indicators[col+'_20_bollinger_slope'] = indicators[col+'_20_bollinger'].diff()
+        
         indicators['market'] = indicators['close']
         return indicators
 
@@ -154,24 +189,26 @@ class FTXTrader:
 
 
             self.market_price = last_row['market']
+            roi = (self.market_price-self.last_buy_price) / self.last_buy_price
+            zscore = (self.market_price - last_row['avg_EMA20'])/last_row['avg_std20']
+
             print(f'''{datetime.datetime.today()}''')
             if(self.demo):
                 print('##DEMO MODE##')
             print('State: {}'.format(self.state))
             print('Balance: ', self.get_balance())
+            print(f'Zscore: {zscore}')
             print('')
+            
 
             if(self.state == 'volatile'):
-                roi = (self.market_price-self.last_buy_price) / \
-                    self.last_buy_price
-
-                if(roi > self.minimum_roi):
+                if(roi > 0 and zscore>1.2):
                     self.sell_volatile(self.balance[self.currency['volatile']])
                     self.state = 'stable HODL'
 
                 elif ((not last_row['short']) and last_row['separate']):
 
-                    if(roi < -3*self.minimum_roi):
+                    if(roi < -self.maximum_loss and zscore>-1.2):
                         self.sell_volatile(
                             self.balance[self.currency['volatile']])
                         self.state = 'stable'
@@ -183,10 +220,10 @@ class FTXTrader:
 
             elif self.state == 'stable':
 
-                if(last_row['short'] and last_row['separate']):
+                if((last_row['short'] and last_row['separate']) or zscore < -1.7 ):
                     self.buy_volatile(self.balance[self.currency['stable']])
                     self.state = 'volatile'
-        except e:
+        except Exception as e:
             print('ERROR:',e)
 
     def get_balance(self):
