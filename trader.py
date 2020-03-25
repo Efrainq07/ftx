@@ -124,38 +124,36 @@ class FTXTrader:
 
         self.update_graph(last_row)
 
+        self.market_price = last_row['market']
+        print(f'''{datetime.datetime.today()}''')
+        print('State: {}'.format(self.state))
+        print('Balance: ', self.get_balance())
 
-        if(self.demo):
-            self.market_price = last_row['market']
-            print(f'''{datetime.datetime.today()}''')
-            print('State: {}'.format(self.state))
-            print('Balance: ', self.get_balance())
+        if(self.state == 'volatile'):
+            roi = (self.market_price-self.last_buy_price) / \
+                self.last_buy_price
 
-            if(self.state == 'volatile'):
-                roi = (self.market_price-self.last_buy_price) / \
-                    self.last_buy_price
+            if(roi > self.minimum_roi):
+                self.sell_volatile(self.balance[self.currency['volatile']])
+                self.state = 'stable HODL'
 
-                if(roi > self.minimum_roi):
-                    self.sell_volatile(self.balance[self.currency['volatile']])
-                    self.state = 'stable HODL'
+            elif ((not last_row['short']) and last_row['separate']):
 
-                elif ((not last_row['short']) and last_row['separate']):
-
-                    if(roi < -3*self.minimum_roi):
-                        self.sell_volatile(
-                            self.balance[self.currency['volatile']])
-                        self.state = 'stable'
-
-            elif self.state == 'stable HODL':
-
-                if ((not last_row['short']) and last_row['separate']):
+                if(roi < -3*self.minimum_roi):
+                    self.sell_volatile(
+                        self.balance[self.currency['volatile']])
                     self.state = 'stable'
 
-            elif self.state == 'stable':
+        elif self.state == 'stable HODL':
 
-                if(last_row['short'] and last_row['separate']):
-                    self.buy_volatile(self.balance[self.currency['stable']])
-                    self.state = 'volatile'
+            if ((not last_row['short']) and last_row['separate']):
+                self.state = 'stable'
+
+        elif self.state == 'stable':
+
+            if(last_row['short'] and last_row['separate']):
+                self.buy_volatile(self.balance[self.currency['stable']])
+                self.state = 'volatile'
 
     def get_balance(self):
         balances = client.get_balances()
