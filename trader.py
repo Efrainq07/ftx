@@ -146,6 +146,7 @@ class FTXTrader:
 
         # Gets the last row of the results
         last_row = results.iloc[-1]
+        self.last_datum = last_row
 
 
         self.market_price = last_row['market']
@@ -215,7 +216,7 @@ class FTXTrader:
             time.sleep(0.2)
             history_data = self.client.get_order_history(self.market,'buy','market',order_start)
             order_status = next(order for order in history_data if order['id'] == order_data['id'])
-            
+
             buy_price = order_status['avgFillPrice']
 
 
@@ -256,4 +257,5 @@ t = FTXTrader(**settings_dict)
 
 while True:
     scd.run_pending()
-    time.sleep(1)
+    plt.pause(.5)
+    time.sleep(.5)
