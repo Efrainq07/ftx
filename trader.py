@@ -206,14 +206,16 @@ class FTXTrader:
             buy_intend = stable_amount/self.market_price
             self.get_balance()[self.currency['volatile']] += buy_intend
             self.get_balance()[self.currency['stable']] = 0
-            buy_price = buy_intend/stable_amount
+            buy_price = stable_amount/buy_intend
         else:
             buy_intend = stable_amount/self.market_price
+
             order_start = datetime.datetime.today().timestamp()
             order_data = self.client.place_order(self.market,'buy',None,buy_intend,'market')
             time.sleep(0.2)
             history_data = self.client.get_order_history(self.market,'buy','market',order_start)
             order_status = next(order for order in history_data if order['id'] == order_data['id'])
+            
             buy_price = order_status['avgFillPrice']
 
 
