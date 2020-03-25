@@ -43,6 +43,7 @@ class FTXTrader:
 
         # Initialize graph 
         self.last_datum = None
+        plt.style.use('dark_background')
         plt.ion()
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111)
@@ -103,11 +104,13 @@ class FTXTrader:
         mpf.candlestick_ohlc(self.ax, self.ohlc_list, width=0.4, colorup='#77d879', colordown='#db3f3f')
         self.line1 = self.ax.plot(self.x, self.avg_EMA26, 'g', label = "avg_EMA26")
         self.line2 = self.ax.plot(self.x, self.avg_EMA9, 'r', label = "avg_EMA9")
-
+    
         if (last_row):
             pass
         else:
             self.ax.legend()
+            self.ax.set_xlabel('Últimas 6 horas')
+            self.ax.set_ylabel(self.market)
 
         # Redraw figure
         self.fig.canvas.draw()
