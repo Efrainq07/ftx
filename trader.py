@@ -41,11 +41,12 @@ class FTXTrader:
         self.currency = {'volatile': self.market.split('/')[0],
                          'stable': self.market.split('/')[1]}  # Dictionary of coin pairs
         self.maximum_loss = kwargs['maximum_loss']  # Minimum roi threshold
-
+        
         # Initialize graph 
         self.last_datum = None
         plt.style.use('dark_background')
         plt.ion()
+        self.line_dict = {}
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(211)
         self.axslope = self.fig.add_subplot(212)
@@ -59,6 +60,7 @@ class FTXTrader:
              initial_indicators['avg_EMA9'].tolist(), [[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
         self.graph_dict= {
             'x':list(range(0,len(initial_indicators))),
+            'date':initial_indicators['date'].tolist(),
             'avg_EMA26':initial_indicators['avg_EMA26'].tolist(),
             'avg_EMA9': initial_indicators['avg_EMA9'].tolist(),
             'avg_EMA20':initial_indicators['avg_EMA20'].tolist(),
@@ -90,7 +92,7 @@ class FTXTrader:
 
         # Scheduler runs the trading function every dt seconds
         scd.every(kwargs['dt']).seconds.do(self.trading)
-        scd.every(self.resolution/2).seconds.do(self.update_graph)
+        scd.every(kwargs['dt']).seconds.do(self.update_graph)
 
     def make_timeseries_df(self, data):
         """
@@ -106,28 +108,34 @@ class FTXTrader:
         last_row = self.last_datum
         ## Update graph
         if(last_row is not None):
-            self.graph_dict['x'].append(self.graph_dict['x'][-1]+1)
-            self.graph_dict['ohlc_list'].append([self.graph_dict['ohlc_list'][-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
-            for key in self.graph_dict:
-                if(key in ['x','ohlc_list']):
-                    continue
-                self.graph_dict[key].append(last_row[key])
+            if(last_row['date'] == self.graph_dict['date'][-1]):
+                self.graph_dict['ohlc_list'][-1] = [self.graph_dict['ohlc_list'][-1][0],last_row['open'],last_row['high'],last_row['low'],last_row['close']]
+                for key in self.graph_dict:
+                    if(key in ['x','ohlc_list','date']):
+                        continue
+                    self.graph_dict[key][-1] = last_row[key]
+            else:
+                self.graph_dict['x'].append(self.graph_dict['x'][-1]+1)
+                self.graph_dict['ohlc_list'].append([self.graph_dict['ohlc_list'][-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
+                for key in self.graph_dict:
+                    if(key in ['x','ohlc_list']):
+                        continue
+                    self.graph_dict[key].append(last_row[key])
             
         # Update line graph
         colors = cm.rainbow(np.linspace(0,1,len(self.graph_dict)))
-        mpf.candlestick_ohlc(self.ax, self.graph_dict['ohlc_list'], width=0.4, colorup='#77d879', colordown='#db3f3f')
+        self.line_dict['ohlc_list'] = mpf.candlestick_ohlc(self.ax, self.graph_dict['ohlc_list'], width=0.4, colorup='#77d879', colordown='#db3f3f')
         for color,key in zip(colors,self.graph_dict):
-            if(key in ['x','ohlc_list']):
+            if(key in ['x','ohlc_list','date']):
                 continue
             if key.split('_')[-1]=='slope':
-
-                self.axslope.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key) 
+                self.line_dict[key] = self.axslope.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key) 
             elif key.split('_')[-1]=='bollinger':
-                self.ax.fill_between(self.graph_dict['x'],self.graph_dict[key+'_bottom'],self.graph_dict[key],color = 'grey') 
+                self.line_dict[key] =  self.ax.fill_between(self.graph_dict['x'],self.graph_dict[key+'_bottom'],self.graph_dict[key],color = 'grey') 
             elif key.split('_')[-1]=='bottom':
                 continue  
             else:
-                self.ax.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key)
+                self.line_dict[key] = self.ax.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key)
 
     
         if (last_row is not None):
@@ -220,7 +228,7 @@ class FTXTrader:
 
             elif self.state == 'stable':
 
-                if((last_row['short'] and last_row['separate']) or zscore < -1.7 ):
+                if((last_row['short'] and last_row['separate'] and zscore < 0.5) or zscore < -1.7 ):
                     self.buy_volatile(self.balance[self.currency['stable']])
                     self.state = 'volatile'
         except Exception as e:
