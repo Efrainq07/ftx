@@ -107,6 +107,8 @@ class FTXTrader:
     def update_graph(self):
         last_row = self.last_datum
         ## Update graph
+        self.ax.cla()
+        self.axslope.cla()
         if(last_row is not None):
             if(last_row['date'] == self.graph_dict['date'][-1]):
                 self.graph_dict['ohlc_list'][-1] = [self.graph_dict['ohlc_list'][-1][0],last_row['open'],last_row['high'],last_row['low'],last_row['close']]
@@ -115,12 +117,16 @@ class FTXTrader:
                         continue
                     self.graph_dict[key][-1] = last_row[key]
             else:
+                self.graph_dict['x'].pop(0)
+                self.graph_dict['ohlc_list'].pop(0)
+
                 self.graph_dict['x'].append(self.graph_dict['x'][-1]+1)
                 self.graph_dict['ohlc_list'].append([self.graph_dict['ohlc_list'][-1][0]+1,last_row['open'],last_row['high'],last_row['low'],last_row['close']])
                 for key in self.graph_dict:
                     if(key in ['x','ohlc_list']):
                         continue
                     self.graph_dict[key].append(last_row[key])
+                    self.graph_dict[key].pop(0)
             
         # Update line graph
         colors = cm.rainbow(np.linspace(0,1,len(self.graph_dict)))
@@ -138,16 +144,14 @@ class FTXTrader:
                 self.line_dict[key] = self.ax.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key)
 
     
-        if (last_row is not None):
-            pass
-        else:
-            self.ax.legend()
-            self.ax.set_xlabel('Últimas 6 horas')
-            self.ax.set_ylabel(self.market)
+        
+        self.ax.legend()
+        self.ax.set_xlabel('Últimas 6 horas')
+        self.ax.set_ylabel(self.market)
 
-            self.axslope.legend()
-            self.axslope.set_ylabel('Slope')
-            self.axslope.set_xlabel('Últimas 6 horas')
+        self.axslope.legend()
+        self.axslope.set_ylabel('Slope')
+        self.axslope.set_xlabel('Últimas 6 horas')
 
         # Redraw figure
         self.fig.canvas.draw()
