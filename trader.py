@@ -229,7 +229,10 @@ class FTXTrader:
 
                 if ((not last_row['short']) and last_row['separate']):
                     self.state = 'stable'
-
+                
+                if(zscore <-1.7):
+                    self.buy_volatile(self.balance[self.currency['stable']])
+                    self.state = 'volatile'
             elif self.state == 'stable':
 
                 if((last_row['short'] and last_row['separate'] and zscore < 0.5) or zscore < -1.7 ):
