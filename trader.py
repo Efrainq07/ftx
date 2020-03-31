@@ -64,10 +64,13 @@ class FTXTrader:
             'avg_EMA26':initial_indicators['avg_EMA26'].tolist(),
             'avg_EMA9': initial_indicators['avg_EMA9'].tolist(),
             'avg_EMA20':initial_indicators['avg_EMA20'].tolist(),
-            'avg_EMA20_slope':initial_indicators['avg_EMA20_slope'].tolist(),
+            #'avg_EMA20_slope':initial_indicators['avg_EMA20_slope'].tolist(),
             'avg_20_bollinger_bottom':initial_indicators['avg_20_bollinger_bottom'].tolist(),
             'avg_20_bollinger':initial_indicators['avg_20_bollinger'].tolist(),
-            'avg_20_bollinger_slope':initial_indicators['avg_20_bollinger_slope'].tolist(),
+            #'avg_20_bollinger_slope':initial_indicators['avg_20_bollinger_slope'].tolist(),
+            'avg_EMAcross(9,26)_slope':initial_indicators['avg_EMAcross(9,26)_slope'].tolist(),
+            'avg_EMAcross(9,26)_std_20_bollinger_up_slope':initial_indicators['avg_EMAcross(9,26)_std_20_bollinger_up_slope'].tolist(),
+            'avg_EMAcross(9,26)_std_20_bollinger_bottom_slope':initial_indicators['avg_EMAcross(9,26)_std_20_bollinger_bottom_slope'].tolist(),
             'ohlc_list':[[date,o,h,l,c] for date,o,h,l,c in initial_indicators[['index','open','high','low','close']].values]
         }
         self.update_graph()
@@ -135,7 +138,15 @@ class FTXTrader:
             if(key in ['x','ohlc_list','date']):
                 continue
             if key.split('_')[-1]=='slope':
-                self.line_dict[key] = self.axslope.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key) 
+                if key.split('_')[-2]=='up':
+                    im = key.split('_')
+                    im[-2]='bottom'
+                    bot = '_'.join(im)
+                    self.line_dict[key] =  self.axslope.fill_between(self.graph_dict['x'],self.graph_dict[bot],self.graph_dict[key],color = 'grey') 
+                elif key.split('_')[-2]=='bottom':
+                    pass
+                else:
+                    self.line_dict[key] = self.axslope.plot(self.graph_dict['x'], self.graph_dict[key], color = color[:-1],label = key) 
             elif key.split('_')[-1]=='bollinger':
                 self.line_dict[key] =  self.ax.fill_between(self.graph_dict['x'],self.graph_dict[key+'_bottom'],self.graph_dict[key],color = 'grey') 
             elif key.split('_')[-1]=='bottom':
@@ -166,11 +177,16 @@ class FTXTrader:
             indicators[col + '_EMA26'] = data[col].ewm(span=26).mean()
             indicators[col + '_EMA20'] = data[col].ewm(span=20).mean()
             indicators[col + '_EMA9'] = data[col].ewm(span=9).mean()
+            indicators[col+'_EMAcross(9,26)'] = indicators[col+'_EMA9']-indicators[col+'_EMA26']
             indicators[col+'_std20'] = data[col].rolling(window=20).std() 
             indicators[col+'_20_bollinger'] = indicators[col+'_EMA20']+2*indicators[col+'_std20']
             indicators[col+'_20_bollinger_bottom'] = indicators[col+'_EMA20']-2*indicators[col+'_std20']
-            indicators[col+'_EMA20_slope'] = indicators[col+'_EMA20'].diff()
-            indicators[col+'_20_bollinger_slope'] = indicators[col+'_20_bollinger'].diff()
+            #indicators[col+'_EMA20_slope'] = indicators[col+'_EMA20'].diff()
+            indicators[col+'_EMAcross(9,26)_slope'] = indicators[col+'_EMAcross(9,26)'].diff()
+            indicators[col+'_EMAcross(9,26)_std_slope'] = indicators[col+'_EMAcross(9,26)'].rolling(window=20).std()
+            indicators[col+'_EMAcross(9,26)_std_20_bollinger_up_slope'] = indicators[col+'_EMAcross(9,26)_slope'] + 2*indicators[col+'_EMAcross(9,26)_std_slope']
+            indicators[col+'_EMAcross(9,26)_std_20_bollinger_bottom_slope'] = indicators[col+'_EMAcross(9,26)_slope'] - 2*indicators[col+'_EMAcross(9,26)_std_slope']
+            #indicators[col+'_20_bollinger_slope'] = indicators[col+'_20_bollinger'].diff()
         
         indicators['market'] = indicators['close']
         return indicators
