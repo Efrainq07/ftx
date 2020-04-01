@@ -10,4 +10,6 @@ The main FTXTrader class can be used by running trader.py.
 
 Demo mode included on FTXTrader class.
 
+
+
 See comments for details.
